@@ -1,16 +1,19 @@
 import {
   Composition,
   useCurrentFrame,
+  useVideoConfig,
   interpolate,
   AbsoluteFill,
   registerRoot,
+  Sequence,
 } from "remotion";
-import { Child } from "./components/Child";
-import { Adult } from "./components/Adult";
-import { Dialogue } from "./components/Dialogue";
-import { Background } from "./components/Background";
-import { QRCode } from "./components/QRCode";
-import { Particles } from "./components/Particles";
+import { CinematicBackground } from "./components/CinematicBackground";
+import { CinematicChild } from "./components/CinematicChild";
+import { CinematicAdult } from "./components/CinematicAdult";
+import { CinematicDialogue } from "./components/CinematicDialogue";
+import { CinematicParticles } from "./components/CinematicParticles";
+import { CinematicQR } from "./components/CinematicQR";
+import { CinematicOverlay } from "./components/CinematicOverlay";
 
 const DURATION = 1800;
 const FPS = 30;
@@ -33,62 +36,104 @@ const SCENES = {
   cta: { start: BLOCK * 11, end: BLOCK * 12 },
 };
 
-function opacity(frame: number, sceneStart: number, sceneEnd: number) {
-  const fadeIn = interpolate(frame, [sceneStart, sceneStart + 15], [0, 1], { extrapolate: "clamp" });
-  const fadeOut = interpolate(frame, [sceneEnd - 15, sceneEnd], [1, 0], { extrapolate: "clamp" });
+function sceneOpacity(frame: number, sceneStart: number, sceneEnd: number) {
+  const fadeIn = interpolate(frame, [sceneStart, sceneStart + 20], [0, 1], { extrapolate: "clamp" });
+  const fadeOut = interpolate(frame, [sceneEnd - 20, sceneEnd], [1, 0], { extrapolate: "clamp" });
   return fadeIn * fadeOut;
 }
 
-const TestVideo = () => {
+function getCurrentScene(frame: number) {
+  return Object.entries(SCENES).find(([, v]) => frame >= v.start && frame < v.end)?.[0] || "cta";
+}
+
+const CinematicTestVideo = () => {
   const frame = useCurrentFrame();
-  const currentScene = Object.entries(SCENES).find(([, v]) => frame >= v.start && frame < v.end)?.[0] || "cta";
+  const { width, height } = useVideoConfig();
+  const currentScene = getCurrentScene(frame);
 
   return (
     <>
-      <Background frame={frame} scene={currentScene} width={WIDTH} height={HEIGHT} />
-      <Particles frame={frame} scene={currentScene} width={WIDTH} height={HEIGHT} />
-      <Child frame={frame} scene={currentScene} width={WIDTH} height={HEIGHT} opacity={opacity(frame, SCENES.hook.start, SCENES.promise.end)} />
-      <Adult frame={frame} scene={currentScene} width={WIDTH} height={HEIGHT} opacity={opacity(frame, SCENES.reality.start, SCENES.promise.end)} />
-      <Dialogue frame={frame} scene={currentScene} width={WIDTH} />
+      <CinematicBackground frame={frame} scene={currentScene} width={width} height={height} />
+      <CinematicParticles frame={frame} scene={currentScene} width={width} height={height} />
+
+      <CinematicChild
+        frame={frame}
+        scene={currentScene}
+        width={width}
+        height={height}
+        opacity={sceneOpacity(frame, SCENES.hook.start, SCENES.promise.end)}
+      />
+      <CinematicAdult
+        frame={frame}
+        scene={currentScene}
+        width={width}
+        height={height}
+        opacity={sceneOpacity(frame, SCENES.reality.start, SCENES.promise.end)}
+      />
+
+      <CinematicDialogue frame={frame} scene={currentScene} width={width} />
+
       {(currentScene === "discovery" || currentScene === "demo" || currentScene === "teaching" || currentScene === "practice") && (
-        <UIOverlay frame={frame} scene={currentScene} width={WIDTH} height={HEIGHT} />
+        <CinematicOverlay frame={frame} scene={currentScene} width={width} height={height} />
       )}
-      <QRCode frame={frame} scene={currentScene} width={WIDTH} height={HEIGHT} />
+
+      <CinematicQR frame={frame} scene={currentScene} width={width} height={height} />
+
+      {/* Film grain overlay */}
+      <FilmGrain frame={frame} width={width} height={height} />
+
+      {/* Vignette */}
+      <Vignette width={width} height={height} />
     </>
   );
 };
 
-const UIOverlay = ({ frame, scene, width, height }: { frame: number; scene: string; width: number; height: number }) => {
-  const show = opacity(frame, SCENES.discovery.start, SCENES.practice.end);
-  if (show < 0.01) return null;
-  const tools = [
-    { name: "RTK", desc: "33% tokens", color: "#00d4ff" },
-    { name: "n8n", desc: "Workflows", color: "#f472b6" },
-    { name: "Graphify", desc: "Grafos", color: "#7c3aed" },
-    { name: "Remotion", desc: "Vídeo", color: "#22c55e" },
-    { name: "Firecrawl", desc: "Scraping", color: "#f97316" },
-    { name: "Puppeteer", desc: "Browser", color: "#eab308" },
-    { name: "Vercel", desc: "Deploy", color: "#06b6d4" },
-    { name: "Skills", desc: "MCPs", color: "#a855f7" },
-  ];
+const FilmGrain = ({ frame, width, height }: { frame: number; width: number; height: number }) => {
+  // Procedural film grain via SVG noise
+  const grainSize = 2;
+  const cols = Math.ceil(width / grainSize);
+  const rows = Math.ceil(height / grainSize);
+
+  const noise = Array.from({ length: Math.min(cols * rows, 5000) }, (_, i) => {
+    const x = (i % cols) * grainSize;
+    const y = Math.floor(i / cols) * grainSize;
+    const seed = (x * 12345 + y * 67890 + frame * 1000) % 10000;
+    const opacity = (seed / 10000) * 0.08;
+    return <rect key={i} x={x} y={y} width={grainSize} height={grainSize} fill="white" fillOpacity={opacity} />;
+  });
+
   return (
-    <AbsoluteFill style={{ opacity: show, pointerEvents: "none" }}>
-      <div style={{ position: "absolute", bottom: "80px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "24px", flexWrap: "wrap", justifyContent: "center", padding: "0 40px" }}>
-        {tools.map((tool, i) => (
-          <div key={tool.name} style={{ background: "rgba(15,15,35,0.95)", border: `2px solid ${tool.color}`, borderRadius: "16px", padding: "16px 28px", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", boxShadow: `0 0 30px ${tool.color}40`, animation: `popIn 0.5s ease-out ${i * 0.1}s both` }}>
-            <div style={{ fontSize: "22px", fontWeight: "800", color: tool.color, textShadow: `0 0 20px ${tool.color}` }}>{tool.name}</div>
-            <div style={{ fontSize: "14px", color: "#94a3b8" }}>{tool.desc}</div>
-          </div>
-        ))}
-      </div>
-      <style jsx global>{`@keyframes popIn { from { opacity: 0; transform: scale(0.8) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }`}</style>
+    <AbsoluteFill style={{ pointerEvents: "none", mixBlendMode: "overlay", opacity: 0.15 }}>
+      <svg width={width} height={height}>{noise}</svg>
     </AbsoluteFill>
   );
 };
 
+const Vignette = ({ width, height }: { width: number; height: number }) => (
+  <AbsoluteFill style={{ pointerEvents: "none" }}>
+    <svg width={width} height={height}>
+      <defs>
+        <radialGradient id="vignette" cx="50%" cy="50%" r="70%">
+          <stop offset="0%" stopColor="black" stopOpacity="0" />
+          <stop offset="100%" stopColor="black" stopOpacity="0.4" />
+        </radialGradient>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#vignette)" />
+    </svg>
+  </AbsoluteFill>
+);
+
 export const Root = () => (
   <>
-    <Composition id="TestVideo" component={TestVideo} durationInFrames={DURATION} fps={FPS} width={WIDTH} height={HEIGHT} defaultProps={{}} />
+    <Composition
+      id="TestVideo"
+      component={CinematicTestVideo}
+      durationInFrames={DURATION}
+      fps={FPS}
+      width={WIDTH}
+      height={HEIGHT}
+      defaultProps={{}}
+    />
   </>
 );
 

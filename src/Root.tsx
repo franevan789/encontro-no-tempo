@@ -3,6 +3,7 @@ import {
   useCurrentFrame,
   interpolate,
   AbsoluteFill,
+  registerRoot,
 } from "remotion";
 import { Child } from "./components/Child";
 import { Adult } from "./components/Adult";
@@ -38,7 +39,7 @@ function opacity(frame: number, sceneStart: number, sceneEnd: number) {
   return fadeIn * fadeOut;
 }
 
-export const TestVideo = () => {
+const TestVideo = () => {
   const frame = useCurrentFrame();
   const currentScene = Object.entries(SCENES).find(([, v]) => frame >= v.start && frame < v.end)?.[0] || "cta";
 
@@ -90,3 +91,5 @@ export const Root = () => (
     <Composition id="TestVideo" component={TestVideo} durationInFrames={DURATION} fps={FPS} width={WIDTH} height={HEIGHT} defaultProps={{}} />
   </>
 );
+
+registerRoot(Root);
